@@ -1,9 +1,9 @@
 package com.icfolson.aem.library.core.tags
 
+import com.day.cq.wcm.api.components.Component
 import com.icfolson.aem.library.api.components.annotations.AutoInstantiate
 import com.icfolson.aem.library.api.page.PageManagerDecorator
 import com.icfolson.aem.library.core.bindings.WCMModeBindings
-import com.day.cq.wcm.api.components.Component
 import groovy.util.logging.Slf4j
 import org.apache.commons.lang3.StringUtils
 import org.apache.sling.api.SlingHttpServletRequest
@@ -11,11 +11,11 @@ import org.apache.sling.api.scripting.SlingScriptHelper
 
 import javax.servlet.jsp.JspTagException
 
-import static com.icfolson.aem.library.core.constants.ComponentConstants.PROPERTY_CLASS_NAME
 import static com.day.cq.wcm.tags.DefineObjectsTag.DEFAULT_COMPONENT_NAME
 import static com.day.cq.wcm.tags.DefineObjectsTag.DEFAULT_CURRENT_PAGE_NAME
 import static com.day.cq.wcm.tags.DefineObjectsTag.DEFAULT_PAGE_MANAGER_NAME
 import static com.day.cq.wcm.tags.DefineObjectsTag.DEFAULT_SLING_NAME
+import static com.icfolson.aem.library.core.constants.ComponentConstants.PROPERTY_CLASS_NAME
 import static org.apache.sling.scripting.jsp.taglib.DefineObjectsTag.DEFAULT_REQUEST_NAME
 
 /**
@@ -25,6 +25,7 @@ import static org.apache.sling.scripting.jsp.taglib.DefineObjectsTag.DEFAULT_REQ
 final class DefineObjectsTag extends AbstractComponentInstanceTag {
 
     private static final def ATTR_COMPONENT_INSTANCE_NAME = "componentInstanceName"
+    private static final def ATTR_COMPONENT_INSTANCE_CACHE = "componentInstanceCache"
 
     @Override
     int doEndTag(int scope) {
@@ -104,9 +105,17 @@ final class DefineObjectsTag extends AbstractComponentInstanceTag {
 
     private void setComponentInstance(Class<?> clazz, String className) {
         if (clazz.isAnnotationPresent(AutoInstantiate)) {
+            def slingRequest = pageContext.getAttribute(DEFAULT_REQUEST_NAME) as SlingHttpServletRequest
+            def componentInstanceCache = slingRequest.getAttribute(ATTR_COMPONENT_INSTANCE_CACHE) ?: [:]
+
             def autoInstantiate = clazz.getAnnotation(AutoInstantiate)
             def instanceName = autoInstantiate.instanceName() ?: StringUtils.uncapitalize(clazz.simpleName)
-            def instance = getInstance(clazz)
+            def instance = componentInstanceCache.get(slingRequest.resource.path)
+            if (!instance) {
+                instance = getInstance(clazz)
+                componentInstanceCache.put(slingRequest.resource.path, instance)
+                slingRequest.setAttribute(ATTR_COMPONENT_INSTANCE_CACHE, componentInstanceCache)
+            }
 
             LOG.debug("class name = {}, instance name = {}, setting component in page context", className,
                 instanceName)
